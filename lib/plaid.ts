@@ -1,3 +1,7 @@
+// DISABLED — Plaid integration removed. Replaced by internal MongoDB ledger.
+// Kept for reference only. Do not import from this file.
+
+/*
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 
 const configuration = new Configuration({
@@ -11,3 +15,4 @@ const configuration = new Configuration({
 })
 
 export const plaidClient = new PlaidApi(configuration);
+*/

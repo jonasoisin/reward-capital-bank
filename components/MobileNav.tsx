@@ -1,10 +1,19 @@
 'use client'
 
 import {
+  ArrowLeftRight,
+  Bell,
+  CreditCard,
+  LayoutDashboard,
+  LucideIcon,
+  Send,
+  UserCircle,
+  Users,
+} from 'lucide-react'
+import {
   Sheet,
   SheetClose,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -15,6 +24,16 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Footer from "./Footer"
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  CreditCard,
+  ArrowLeftRight,
+  Send,
+  Users,
+  Bell,
+  UserCircle,
+}
 
 const MobileNav = ({ user }: MobileNavProps) => {
   const pathname = usePathname();
@@ -32,8 +51,11 @@ const MobileNav = ({ user }: MobileNavProps) => {
           />
         </SheetTrigger>
         <SheetContent side="left" className="border-none bg-white">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation menu</SheetTitle>
+          </SheetHeader>
           <Link href="/" className="cursor-pointer flex items-center gap-1 px-4">
-            <Image 
+            <Image
               src="/icons/logo.svg"
               width={34}
               height={34}
@@ -44,32 +66,33 @@ const MobileNav = ({ user }: MobileNavProps) => {
           <div className="mobilenav-sheet">
             <SheetClose asChild>
               <nav className="flex h-full flex-col gap-6 pt-16 text-white">
-                  {sidebarLinks.map((item) => {
-                const isActive = pathname === item.route || pathname.startsWith(`${item.route}/`)
+                {sidebarLinks.map((item) => {
+                  const isActive = item.exactMatch
+                    ? pathname === item.route
+                    : pathname === item.route || pathname.startsWith(`${item.route}/`);
 
-                return (
-                  <SheetClose asChild key={item.route}>
-                    <Link href={item.route} key={item.label}
-                      className={cn('mobilenav-sheet_close w-full', { 'bg-bank-gradient': isActive })}
-                    >
-                        <Image 
-                          src={item.imgURL}
-                          alt={item.label}
-                          width={20}
-                          height={20}
-                          className={cn({
-                            'brightness-[3] invert-0': isActive
-                          })}
-                        />
-                      <p className={cn("text-16 font-semibold text-black-2", { "text-white": isActive })}>
-                        {item.label}
-                      </p>
-                    </Link>
-                  </SheetClose>
-                )
-              })}
+                  const Icon = ICON_MAP[item.icon];
 
-              USER
+                  return (
+                    <SheetClose asChild key={item.route}>
+                      <Link
+                        href={item.route}
+                        className={cn('mobilenav-sheet_close w-full', { 'bg-bank-gradient': isActive })}
+                      >
+                        {Icon && (
+                          <Icon
+                            size={20}
+                            className={cn('shrink-0 text-black-2', { 'text-white': isActive })}
+                            strokeWidth={isActive ? 2.5 : 1.8}
+                          />
+                        )}
+                        <p className={cn("text-16 font-semibold text-black-2", { "text-white": isActive })}>
+                          {item.label}
+                        </p>
+                      </Link>
+                    </SheetClose>
+                  )
+                })}
               </nav>
             </SheetClose>
 

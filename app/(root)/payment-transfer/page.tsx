@@ -1,31 +1,38 @@
-import HeaderBox from '@/components/HeaderBox'
-import PaymentTransferForm from '@/components/PaymentTransferForm'
-import { getAccounts } from '@/lib/actions/bank.actions';
-import { getLoggedInUser } from '@/lib/actions/user.actions';
-import React from 'react'
+import HeaderBox from "@/components/HeaderBox";
+import MultiStepTransferForm from "@/components/MultiStepTransferForm";
+import { getLoggedInUser } from "@/lib/actions/user.actions";
+import { getAccount } from "@/lib/actions/account.actions";
+import { redirect } from "next/navigation";
+import { formatAccountNumber } from "@/lib/utils";
 
-const Transfer = async () => {
+const Transfer = async ({
+  searchParams,
+}: {
+  searchParams: { account?: string };
+}) => {
   const loggedIn = await getLoggedInUser();
-  const accounts = await getAccounts({ 
-    userId: loggedIn.$id 
-  })
+  if (!loggedIn) redirect("/sign-in");
 
-  if(!accounts) return;
-  
-  const accountsData = accounts?.data;
+  const account = await getAccount(loggedIn._id);
+  if (!account) redirect("/dashboard");
+
+  const prefillAccountNumber = searchParams.account?.trim() || undefined;
 
   return (
     <section className="payment-transfer">
-      <HeaderBox 
-        title="Payment Transfer"
-        subtext="Please provide any specific details or notes related to the payment transfer"
+      <HeaderBox
+        title="Transfer Money"
+        subtext="Send funds domestically or internationally in a few steps."
       />
-
       <section className="size-full pt-5">
-        <PaymentTransferForm accounts={accountsData} />
+        <MultiStepTransferForm
+          senderAccountNumber={formatAccountNumber(account.accountNumber)}
+          senderBalance={account.balance}
+          prefillAccountNumber={prefillAccountNumber}
+        />
       </section>
     </section>
-  )
-}
+  );
+};
 
-export default Transfer
+export default Transfer;

@@ -1,3 +1,8 @@
+// DISABLED — replaced by MongoDB + JWT auth
+// This file previously used node-appwrite for authentication.
+// Kept for reference only. Do not import from this file.
+
+/*
 "use server";
 
 import { Client, Account, Databases, Users } from "node-appwrite";
@@ -41,4 +46,4 @@ export async function createAdminClient() {
     }
   };
 }
-
+*/

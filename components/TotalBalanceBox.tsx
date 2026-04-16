@@ -1,31 +1,33 @@
-import AnimatedCounter from './AnimatedCounter';
-import DoughnutChart from './DoughnutChart';
+import AnimatedCounter from "./AnimatedCounter";
+import DoughnutChart from "./DoughnutChart";
+import { FadeIn } from "@/components/ui/fade-in";
 
-const TotalBalanceBox = ({
-  accounts = [], totalBanks, totalCurrentBalance
-}: TotalBalanceBoxProps) => {
+const TotalBalanceBox = ({ balance, accountNumber }: TotalBalanceBoxProps) => {
   return (
-    <section className="total-balance">
-      <div className="total-balance-chart">
-        <DoughnutChart accounts={accounts} />
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <h2 className="header-2">
-          Bank Accounts: {totalBanks}
-        </h2>
-        <div className="flex flex-col gap-2">
-          <p className="total-balance-label">
-            Total Current Balance
-          </p>
-
-          <div className="total-balance-amount flex-center gap-2">
-            <AnimatedCounter amount={totalCurrentBalance} />
-          </div>
+    <FadeIn delay={160}>
+      <section
+        className="flex w-full items-center gap-5 rounded-xl border p-5 sm:gap-8 sm:p-6"
+        style={{ borderColor: "var(--ds-border)", background: "var(--ds-card)" }}
+      >
+        <div className="flex w-[88px] shrink-0 items-center sm:w-[104px]">
+          <DoughnutChart balance={balance} />
         </div>
-      </div>
-    </section>
-  )
-}
 
-export default TotalBalanceBox
+        <div className="flex flex-col gap-1.5">
+          <span className="eyebrow">Current Balance</span>
+          <div className="total-balance-amount">
+            <AnimatedCounter amount={balance} />
+          </div>
+          <p
+            className="font-mono text-12 tracking-widest"
+            style={{ color: "var(--ds-muted-foreground)" }}
+          >
+            {accountNumber}
+          </p>
+        </div>
+      </section>
+    </FadeIn>
+  );
+};
+
+export default TotalBalanceBox;

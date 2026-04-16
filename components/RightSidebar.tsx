@@ -1,84 +1,99 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import React from 'react'
-import BankCard from './BankCard'
-import { countTransactionCategories } from '@/lib/utils'
-import Category from './Category'
+import Link from "next/link";
+import { Send } from "lucide-react";
+import BankCard from "./BankCard";
+import { formatAmount } from "@/lib/utils";
 
-const RightSidebar = ({ user, transactions, banks }: RightSidebarProps) => {
-  const categories: CategoryCount[] = countTransactionCategories(transactions);
-
+const RightSidebar = ({ user, transactions, account, card }: RightSidebarProps) => {
   return (
     <aside className="right-sidebar">
-      <section className="flex flex-col pb-8">
-        <div className="profile-banner" />
-        <div className="profile">
-          <div className="profile-img">
-            <span className="text-5xl font-bold text-blue-500">{user.firstName[0]}</span>
+      {/* Profile banner */}
+      <section className="flex flex-col">
+        <div className="h-[80px] w-full" style={{ background: "var(--ds-muted)" }} />
+        <div className="relative flex px-6">
+          {/* Avatar */}
+          <div
+            className="absolute -top-7 flex h-[56px] w-[56px] items-center justify-center rounded-full border-4 border-white text-20 font-semibold"
+            style={{ background: "var(--ds-primary)", color: "var(--ds-primary-fg)" }}
+          >
+            {user.firstName[0]}
           </div>
-
-          <div className="profile-details">
-            <h1 className='profile-name'>
+          <div className="flex flex-col pt-12 pb-6">
+            <p className="text-16 font-semibold" style={{ color: "var(--ds-foreground)" }}>
               {user.firstName} {user.lastName}
-            </h1>
-            <p className="profile-email">
+            </p>
+            <p className="text-12" style={{ color: "var(--ds-muted-foreground)" }}>
               {user.email}
             </p>
           </div>
         </div>
       </section>
 
-      <section className="banks">
-        <div className="flex w-full justify-between">
-          <h2 className="header-2">My Banks</h2>
-          <Link href="/" className="flex gap-2">
-            <Image 
-               src="/icons/plus.svg"
-              width={20}
-              height={20}
-              alt="plus"
-            />
-            <h2 className="text-14 font-semibold text-gray-600">
-              Add Bank
-            </h2>
+      {/* Card section */}
+      <section className="flex flex-col gap-6 px-6 pb-6 border-t" style={{ borderColor: "var(--ds-border)" }}>
+        <div className="flex items-center justify-between pt-6">
+          <span className="eyebrow">My Account</span>
+          <Link
+            href="/payment-transfer"
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-12 font-medium transition-colors hover:bg-gray-50"
+            style={{ borderColor: "var(--ds-border)", color: "var(--ds-foreground)" }}
+          >
+            <Send size={12} />
+            Send Money
           </Link>
         </div>
 
-        {banks?.length > 0 && (
-          <div className="relative flex flex-1 flex-col items-center justify-center gap-5">
-            <div className='relative z-10'>
-              <BankCard 
-                key={banks[0].$id}
-                account={banks[0]}
-                userName={`${user.firstName} ${user.lastName}`}
-                showBalance={false}
-              />
-            </div>
-            {banks[1] && (
-              <div className="absolute right-0 top-8 z-0 w-[90%]">
-                <BankCard 
-                  key={banks[1].$id}
-                  account={banks[1]}
-                  userName={`${user.firstName} ${user.lastName}`}
-                  showBalance={false}
-                />
-              </div>
-            )}
+        {account ? (
+          <div className="flex flex-col items-center">
+            <BankCard
+              account={account}
+              card={card}
+              userName={`${user.firstName} ${user.lastName}`}
+              showBalance={true}
+            />
+          </div>
+        ) : (
+          <p className="text-14 py-4" style={{ color: "var(--ds-muted-foreground)" }}>
+            No account found.
+          </p>
+        )}
+      </section>
+
+      {/* Recent activity */}
+      <section className="flex flex-col gap-4 px-6 pb-8 border-t" style={{ borderColor: "var(--ds-border)" }}>
+        <div className="pt-6">
+          <span className="eyebrow">Recent Activity</span>
+        </div>
+
+        {transactions.length === 0 ? (
+          <p className="text-14" style={{ color: "var(--ds-muted-foreground)" }}>
+            No transactions yet.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {transactions.slice(0, 5).map((t) => {
+              const isCredit = t.type === "credit";
+              return (
+                <div
+                  key={t._id}
+                  className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                  style={{ background: "var(--ds-muted)" }}
+                >
+                  <span className="text-14 capitalize" style={{ color: "var(--ds-foreground)" }}>
+                    {t.type}
+                  </span>
+                  <span
+                    className={`text-14 font-semibold ${isCredit ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {isCredit ? "+" : "-"}{formatAmount(t.amount)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
-
-        <div className="mt-10 flex flex-1 flex-col gap-6">
-          <h2 className="header-2">Top categories</h2>
-
-          <div className='space-y-5'>
-            {categories.map((category, index) => (
-              <Category key={category.name} category={category} />
-            ))}
-          </div>
-        </div>
       </section>
     </aside>
-  )
-}
+  );
+};
 
-export default RightSidebar
+export default RightSidebar;

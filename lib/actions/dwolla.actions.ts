@@ -1,3 +1,7 @@
+// DISABLED — Dwolla integration removed. Replaced by internal MongoDB ledger.
+// Kept for reference only. Do not import from this file.
+
+/*
 "use server";
 
 import { Client } from "dwolla-v2";
@@ -23,7 +27,6 @@ const dwollaClient = new Client({
   secret: process.env.DWOLLA_SECRET as string,
 });
 
-// Create a Dwolla Funding Source using a Plaid Processor Token
 export const createFundingSource = async (
   options: CreateFundingSourceOptions
 ) => {
@@ -71,17 +74,10 @@ export const createTransfer = async ({
   try {
     const requestBody = {
       _links: {
-        source: {
-          href: sourceFundingSourceUrl,
-        },
-        destination: {
-          href: destinationFundingSourceUrl,
-        },
+        source: { href: sourceFundingSourceUrl },
+        destination: { href: destinationFundingSourceUrl },
       },
-      amount: {
-        currency: "USD",
-        value: amount,
-      },
+      amount: { currency: "USD", value: amount },
     };
     return await dwollaClient
       .post("transfers", requestBody)
@@ -97,10 +93,7 @@ export const addFundingSource = async ({
   bankName,
 }: AddFundingSourceParams) => {
   try {
-    // create dwolla auth link
     const dwollaAuthLinks = await createOnDemandAuthorization();
-
-    // add funding source to the dwolla customer & get the funding source url
     const fundingSourceOptions = {
       customerId: dwollaCustomerId,
       fundingSourceName: bankName,
@@ -112,3 +105,4 @@ export const addFundingSource = async ({
     console.error("Transfer fund failed: ", err);
   }
 };
+*/

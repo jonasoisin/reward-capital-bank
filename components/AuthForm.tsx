@@ -1,176 +1,333 @@
-'use client';
+"use client";
 
-import Image from 'next/image'
-import Link from 'next/link'
-import React, { useState } from 'react'
-
-import { z } from "zod"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import { useState } from "react";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { Button } from "@/components/ui/button";
+import { Form } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
-  Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import CustomInput from './CustomInput';
-import { authFormSchema } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { getLoggedInUser, signIn, signUp } from '@/lib/actions/user.actions';
-import PlaidLink from './PlaidLink';
+} from "@/components/ui/form";
+import { FadeIn } from "@/components/ui/fade-in";
+import { Loader2, ArrowRight } from "lucide-react";
 
-const AuthForm = ({ type }: { type: string }) => {
-  const router = useRouter();
-  const [user, setUser] = useState(null);
+const signInSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(8, "Minimum 8 characters"),
+});
+
+const signUpSchema = z.object({
+  firstName: z.string().min(1, "Required"),
+  lastName: z.string().min(1, "Required"),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(8, "Minimum 8 characters"),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+});
+
+const AuthForm = ({ type }: { type: "sign-in" | "sign-up" }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const formSchema = authFormSchema(type);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
+    resolver: zodResolver(type === "sign-in" ? signInSchema : signUpSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      firstName: "",
+      lastName: "",
+      phone: "",
+      address: "",
+      dateOfBirth: "",
+    },
+  });
 
-    // 1. Define your form.
-    const form = useForm<z.infer<typeof formSchema>>({
-      resolver: zodResolver(formSchema),
-      defaultValues: {
-        email: "",
-        password: ''
-      },
-    })
-   
-    // 2. Define a submit handler.
-    const onSubmit = async (data: z.infer<typeof formSchema>) => {
-      setIsLoading(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onSubmit = async (data: any) => {
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        // Sign up with Appwrite & create plaid token
-        
-        if(type === 'sign-up') {
-          const userData = {
-            firstName: data.firstName!,
-            lastName: data.lastName!,
-            address1: data.address1!,
-            city: data.city!,
-            state: data.state!,
-            postalCode: data.postalCode!,
-            dateOfBirth: data.dateOfBirth!,
-            ssn: data.ssn!,
-            email: data.email,
-            password: data.password
-          }
+    try {
+      const endpoint = type === "sign-up" ? "/api/auth/signup" : "/api/auth/signin";
+      const body = type === "sign-up"
+        ? data
+        : { email: data.email, password: data.password };
 
-          const newUser = await signUp(userData);
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-          setUser(newUser);
-        }
+      const result = await res.json();
 
-        if(type === 'sign-in') {
-          const response = await signIn({
-            email: data.email,
-            password: data.password,
-          })
-
-          if(response) router.push('/')
-        }
-      } catch (error) {
-        console.log(error);
-      } finally {
-        setIsLoading(false);
-      }
+      if (result.error) { setError(result.error); return; }
+      if (result.redirectTo) { window.location.href = result.redirectTo; return; }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
   return (
-    <section className="auth-form">
-      <header className='flex flex-col gap-5 md:gap-8'>
-          <Link href="/" className="cursor-pointer flex items-center gap-1">
-            <Image 
-              src="/icons/logo.svg"
-              width={34}
-              height={34}
-              alt="Horizon logo"
-            />
-            <h1 className="text-26 font-ibm-plex-serif font-bold text-black-1">Horizon</h1>
-          </Link>
+    <div className="w-full max-w-[420px] space-y-8">
+      {/* Header */}
+      <div className="space-y-3">
+        <FadeIn delay={0}>
+          <span className="eyebrow">
+            {type === "sign-in" ? "Welcome back" : "Get started"}
+          </span>
+        </FadeIn>
+        <FadeIn delay={80}>
+          <h1 className="ds" style={{ color: "var(--ds-foreground)" }}>
+            {type === "sign-in" ? (
+              <>Sign in to your <em>account.</em></>
+            ) : (
+              <>Create your <em>account.</em></>
+            )}
+          </h1>
+        </FadeIn>
+        <FadeIn delay={140}>
+          <p className="feature-text" style={{ color: "var(--ds-muted-foreground)" }}>
+            {type === "sign-in"
+              ? "Enter your credentials to access your dashboard."
+              : "Fill in your details to open your account instantly."}
+          </p>
+        </FadeIn>
+      </div>
 
-          <div className="flex flex-col gap-1 md:gap-3">
-            <h1 className="text-24 lg:text-36 font-semibold text-gray-900">
-              {user 
-                ? 'Link Account'
-                : type === 'sign-in'
-                  ? 'Sign In'
-                  : 'Sign Up'
-              }
-              <p className="text-16 font-normal text-gray-600">
-                {user 
-                  ? 'Link your account to get started'
-                  : 'Please enter your details'
-                }
-              </p>  
-            </h1>
+      {/* Error */}
+      {error && (
+        <FadeIn direction="none">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
           </div>
-      </header>
-      {user ? (
-        <div className="flex flex-col gap-4">
-          <PlaidLink user={user} variant="primary" />
-        </div>
-      ): (
-        <>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {type === 'sign-up' && (
+        </FadeIn>
+      )}
+
+      {/* Form */}
+      <FadeIn delay={200}>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            {type === "sign-up" && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          className="text-12 font-medium"
+                          style={{ color: "var(--ds-foreground)" }}
+                        >
+                          First name
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Jane"
+                            className="input-class h-11"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-12 text-red-500" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          className="text-12 font-medium"
+                          style={{ color: "var(--ds-foreground)" }}
+                        >
+                          Last name
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Doe"
+                            className="input-class h-11"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-12 text-red-500" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel
+                        className="text-12 font-medium"
+                        style={{ color: "var(--ds-foreground)" }}
+                      >
+                        Address
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="123 Main St"
+                          className="input-class h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-12 text-red-500" />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="dateOfBirth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          className="text-12 font-medium"
+                          style={{ color: "var(--ds-foreground)" }}
+                        >
+                          Date of birth
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="YYYY-MM-DD"
+                            className="input-class h-11"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-12 text-red-500" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          className="text-12 font-medium"
+                          style={{ color: "var(--ds-foreground)" }}
+                        >
+                          Phone
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="+1 555 000 0000"
+                            className="input-class h-11"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-12 text-red-500" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel
+                    className="text-12 font-medium"
+                    style={{ color: "var(--ds-foreground)" }}
+                  >
+                    Email address
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="jane@example.com"
+                      type="email"
+                      className="input-class h-11"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-12 text-red-500" />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel
+                    className="text-12 font-medium"
+                    style={{ color: "var(--ds-foreground)" }}
+                  >
+                    Password
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Min. 8 characters"
+                      type="password"
+                      className="input-class h-11"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-12 text-red-500" />
+                </FormItem>
+              )}
+            />
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="h-11 w-full rounded-full px-8 text-14 font-semibold"
+              style={{
+                background: "var(--ds-primary)",
+                color: "var(--ds-primary-fg)",
+              }}
+            >
+              {isLoading ? (
                 <>
-                  <div className="flex gap-4">
-                    <CustomInput control={form.control} name='firstName' label="First Name" placeholder='Enter your first name' />
-                    <CustomInput control={form.control} name='lastName' label="Last Name" placeholder='Enter your first name' />
-                  </div>
-                  <CustomInput control={form.control} name='address1' label="Address" placeholder='Enter your specific address' />
-                  <CustomInput control={form.control} name='city' label="City" placeholder='Enter your city' />
-                  <div className="flex gap-4">
-                    <CustomInput control={form.control} name='state' label="State" placeholder='Example: NY' />
-                    <CustomInput control={form.control} name='postalCode' label="Postal Code" placeholder='Example: 11101' />
-                  </div>
-                  <div className="flex gap-4">
-                    <CustomInput control={form.control} name='dateOfBirth' label="Date of Birth" placeholder='YYYY-MM-DD' />
-                    <CustomInput control={form.control} name='ssn' label="SSN" placeholder='Example: 1234' />
-                  </div>
+                  <Loader2 size={16} className="animate-spin" />
+                  &nbsp;{type === "sign-in" ? "Signing in…" : "Creating account…"}
+                </>
+              ) : (
+                <>
+                  {type === "sign-in" ? "Sign in" : "Create account"}
+                  <ArrowRight className="ml-1.5 h-4 w-4" />
                 </>
               )}
+            </Button>
+          </form>
+        </Form>
+      </FadeIn>
 
-              <CustomInput control={form.control} name='email' label="Email" placeholder='Enter your email' />
+      {/* Footer link */}
+      <FadeIn delay={280}>
+        <p className="text-center feature-text" style={{ color: "var(--ds-muted-foreground)" }}>
+          {type === "sign-in" ? "Don't have an account? " : "Already have an account? "}
+          <Link
+            href={type === "sign-in" ? "/sign-up" : "/sign-in"}
+            className="font-medium underline underline-offset-4"
+            style={{ color: "var(--ds-foreground)" }}
+          >
+            {type === "sign-in" ? "Sign up" : "Sign in"}
+          </Link>
+        </p>
+      </FadeIn>
+    </div>
+  );
+};
 
-              <CustomInput control={form.control} name='password' label="Password" placeholder='Enter your password' />
-
-              <div className="flex flex-col gap-4">
-                <Button type="submit" disabled={isLoading} className="form-btn">
-                  {isLoading ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" /> &nbsp;
-                      Loading...
-                    </>
-                  ) : type === 'sign-in' 
-                    ? 'Sign In' : 'Sign Up'}
-                </Button>
-              </div>
-            </form>
-          </Form>
-
-          <footer className="flex justify-center gap-1">
-            <p className="text-14 font-normal text-gray-600">
-              {type === 'sign-in'
-              ? "Don't have an account?"
-              : "Already have an account?"}
-            </p>
-            <Link href={type === 'sign-in' ? '/sign-up' : '/sign-in'} className="form-link">
-              {type === 'sign-in' ? 'Sign up' : 'Sign in'}
-            </Link>
-          </footer>
-        </>
-      )}
-    </section>
-  )
-}
-
-export default AuthForm
+export default AuthForm;

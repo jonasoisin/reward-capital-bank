@@ -1,76 +1,48 @@
-import Link from 'next/link'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BankTabItem } from './BankTabItem'
-import BankInfo from './BankInfo'
-import TransactionsTable from './TransactionsTable'
-import { Pagination } from './Pagination'
+import Link from "next/link";
+import TransactionsTable from "./TransactionsTable";
+import { Pagination } from "./Pagination";
+import { FadeIn } from "@/components/ui/fade-in";
+import { ArrowRight } from "lucide-react";
 
 const RecentTransactions = ({
-  accounts,
   transactions = [],
-  appwriteItemId,
   page = 1,
+  totalPages = 1,
+  userId,
 }: RecentTransactionsProps) => {
-  const rowsPerPage = 10;
-  const totalPages = Math.ceil(transactions.length / rowsPerPage);
-
-  const indexOfLastTransaction = page * rowsPerPage;
-  const indexOfFirstTransaction = indexOfLastTransaction - rowsPerPage;
-
-  const currentTransactions = transactions.slice(
-    indexOfFirstTransaction, indexOfLastTransaction
-  )
-
   return (
     <section className="recent-transactions">
-      <header className="flex items-center justify-between">
-        <h2 className="recent-transactions-label">Recent transactions</h2>
-        <Link
-          href={`/transaction-history/?id=${appwriteItemId}`}
-          className="view-all-btn"
-        >
-          View all
-        </Link>
-      </header>
-
-      <Tabs defaultValue={appwriteItemId} className="w-full">
-      <TabsList className="recent-transactions-tablist">
-          {accounts.map((account: Account) => (
-            <TabsTrigger key={account.id} value={account.appwriteItemId}>
-              <BankTabItem
-                key={account.id}
-                account={account}
-                appwriteItemId={appwriteItemId}
-              />
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {accounts.map((account: Account) => (
-          <TabsContent
-            value={account.appwriteItemId}
-            key={account.id}
-            className="space-y-4"
+      <FadeIn delay={0}>
+        <header className="flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="eyebrow">Activity</span>
+            <h3 className="ds" style={{ color: "var(--ds-foreground)" }}>
+              Recent <em>transactions</em>
+            </h3>
+          </div>
+          <Link
+            href="/dashboard/transactions"
+            className="flex items-center gap-1 text-12 font-medium underline underline-offset-4"
+            style={{ color: "var(--ds-muted-foreground)" }}
           >
-            <BankInfo 
-              account={account}
-              appwriteItemId={appwriteItemId}
-              type="full"
-            />
+            View all <ArrowRight className="h-3 w-3" />
+          </Link>
+        </header>
+      </FadeIn>
 
-            <TransactionsTable transactions={currentTransactions} />
-            
+      <FadeIn delay={80}>
+        <TransactionsTable transactions={transactions} userId={userId} />
+      </FadeIn>
 
-            {totalPages > 1 && (
-              <div className="my-4 w-full">
-                <Pagination totalPages={totalPages} page={page} />
-              </div>
-            )}
-          </TabsContent>
-        ))}
-      </Tabs>
+      {totalPages > 1 && (
+        <FadeIn delay={120}>
+          <div className="my-4 w-full">
+            <Pagination totalPages={totalPages} page={page} />
+          </div>
+        </FadeIn>
+      )}
     </section>
-  )
-}
+  );
+};
 
-export default RecentTransactions
+export default RecentTransactions;
