@@ -53,7 +53,7 @@ export default async function AdminDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen px-8 py-10 lg:px-12 lg:py-14" style={{ marginLeft: "256px" }}>
+    <div className="min-h-screen px-8 py-10 lg:px-12 lg:py-14">
       {/* ── Page header ── */}
       <div className="mb-10">
         <FadeIn delay={0} direction="up">

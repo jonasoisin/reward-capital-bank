@@ -6,8 +6,7 @@ import {
   CheckCircle2, Clock, DollarSign, Globe, Loader2,
   Lock, Send, Shield, User2,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -35,50 +34,68 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "./ui/select";
 
-// ── Schema (loose — per-step validation via trigger()) ───────────────────────
+// ── Schema ────────────────────────────────────────────────────────────────────
 
 const schema = z.object({
-  amount:       z.string().refine(v => Number(v) > 0 && Number(v) <= 50000, {
-    message: "Enter an amount between $0.01 and $50,000",
+  amount: z.string().refine(v => Number(v) > 0 && Number(v) <= 200000, {
+    message: "Enter an amount between $0.01 and $200,000",
   }),
   transferType: z.enum(["domestic", "international"]),
-
-  recipientName:    z.string().min(2, "Full name is required"),
+  recipientName: z.string().min(2, "Full name is required"),
   recipientCountry: z.string().min(1, "Select a country"),
-  bankName:         z.string().min(2, "Bank name is required"),
-  usSubRail:        z.enum(["ACH", "WIRE"]).optional(),
-
-  accountNumber:    z.string().optional(),
-  routingNumber:    z.string().optional(),
-  accountType:      z.enum(["checking", "savings"]).optional(),
-  sortCode:         z.string().optional(),
-  iban:             z.string().optional(),
-  swiftCode:        z.string().optional(),
-  bankAddress:      z.string().optional(),
+  bankName: z.string().min(2, "Bank name is required"),
+  usSubRail: z.enum(["ACH", "WIRE"]).optional(),
+  accountNumber: z.string().optional(),
+  routingNumber: z.string().optional(),
+  accountType: z.enum(["checking", "savings"]).optional(),
+  sortCode: z.string().optional(),
+  iban: z.string().optional(),
+  swiftCode: z.string().optional(),
+  bankAddress: z.string().optional(),
   recipientAddress: z.string().optional(),
-  purpose:          z.string().optional(),
-
-  note:             z.string().max(140).optional(),
+  purpose: z.string().optional(),
+  note: z.string().max(140).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-// ── Step field map ────────────────────────────────────────────────────────────
+// ── FX quote type ─────────────────────────────────────────────────────────────
 
-function getStep3Fields(rail: TransferRail): Array<keyof FormValues> {
+interface FXQuote {
+  rate: number;
+  fee: number;
+  totalDebit: number;
+  convertedAmount: number;
+  toCurrency: string;
+  estimatedDelivery: string;
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface PaymentTransferFormProps {
+  senderAccountNumber: string;
+  senderBalance: number;
+  prefillAccountNumber?: string;
+}
+
+// ── Bank fields per rail ──────────────────────────────────────────────────────
+
+function getBankFields(rail: TransferRail): Array<keyof FormValues> {
   switch (rail) {
-    case "US_ACH":   return ["accountNumber", "routingNumber", "accountType"];
-    case "US_WIRE":  return ["accountNumber", "routingNumber"];
-    case "UK_FPS":   return ["accountNumber", "sortCode"];
-    case "EU_SEPA":  return ["iban"];
-    case "SWIFT":    return ["swiftCode"];
-    default:         return [];
+    case "US_ACH":  return ["accountNumber", "routingNumber", "accountType"];
+    case "US_WIRE": return ["accountNumber", "routingNumber"];
+    case "UK_FPS":  return ["accountNumber", "sortCode"];
+    case "EU_SEPA": return ["iban"];
+    case "SWIFT":   return ["swiftCode"];
+    default:        return [];
   }
 }
 
-const STEP_LABELS = ["Setup", "Recipient", "Bank Details", "Review Fees", "Confirm"];
+// ── Step labels ───────────────────────────────────────────────────────────────
 
-// ── Step progress bar ─────────────────────────────────────────────────────────
+const STEP_LABELS = ["Details", "Review", "Done"];
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
 
 function StepBar({ current }: { current: number }) {
   return (
@@ -93,7 +110,7 @@ function StepBar({ current }: { current: number }) {
               <div className="flex flex-col items-center gap-1">
                 <div className={`
                   flex h-8 w-8 items-center justify-center rounded-full text-12 font-bold transition-all
-                  ${done   ? "bg-green-500 text-white"          : ""}
+                  ${done  ? "bg-green-500 text-white" : ""}
                   ${active ? "bg-blue-600 text-white ring-4 ring-blue-100" : ""}
                   ${!done && !active ? "bg-gray-100 text-gray-400" : ""}
                 `}>
@@ -114,14 +131,14 @@ function StepBar({ current }: { current: number }) {
   );
 }
 
-// ── Rail badge ────────────────────────────────────────────────────────────────
+// ── Rail helpers ──────────────────────────────────────────────────────────────
 
 const RAIL_LABELS: Record<TransferRail, { label: string; flag: string; desc: string }> = {
-  US_ACH:  { label: "ACH",           flag: "🇺🇸", desc: "1–3 business days" },
-  US_WIRE: { label: "Wire Transfer", flag: "🇺🇸", desc: "Same day"          },
-  UK_FPS:  { label: "Faster Payments",flag: "🇬🇧", desc: "Within 2 hours"   },
-  EU_SEPA: { label: "SEPA",          flag: "🇪🇺", desc: "1 business day"    },
-  SWIFT:   { label: "SWIFT",         flag: "🌍", desc: "3–5 business days"  },
+  US_ACH:  { label: "ACH",             flag: "🇺🇸", desc: "1–3 business days" },
+  US_WIRE: { label: "Wire Transfer",   flag: "🇺🇸", desc: "Same day" },
+  UK_FPS:  { label: "Faster Payments", flag: "🇬🇧", desc: "Within 2 hours" },
+  EU_SEPA: { label: "SEPA",            flag: "🇪🇺", desc: "1 business day" },
+  SWIFT:   { label: "SWIFT",           flag: "🌍", desc: "3–5 business days" },
 };
 
 function RailBadge({ rail }: { rail: TransferRail }) {
@@ -136,9 +153,9 @@ function RailBadge({ rail }: { rail: TransferRail }) {
   );
 }
 
-// ── Step 1: Amount & Type ─────────────────────────────────────────────────────
+// ── Step 1: Transfer Details (amount + recipient + bank fields) ───────────────
 
-function Step1({
+function DetailsStep({
   form,
   senderAccountNumber,
   senderBalance,
@@ -147,11 +164,18 @@ function Step1({
   senderAccountNumber: string;
   senderBalance: number;
 }) {
-  const amount = Number(form.watch("amount")) || 0;
+  const amount       = Number(form.watch("amount")) || 0;
+  const transferType = form.watch("transferType");
+  const country      = form.watch("recipientCountry");
+  const usSubRail    = form.watch("usSubRail");
+  const rail         = computeRail(country, transferType, usSubRail);
+  const maxAmount    = rail === "US_WIRE" ? 100000 : 200000;
   const insufficient = amount > senderBalance;
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* ── Section: Amount & Type ── */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <p className="eyebrow mb-1">From account</p>
         <p className="font-mono text-14 font-semibold text-gray-900">{senderAccountNumber}</p>
@@ -169,7 +193,7 @@ function Step1({
             <FormControl>
               <div className="relative">
                 <DollarSign size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <Input placeholder="0.00" type="number" step="0.01" min="0.01" max="50000"
+                <Input placeholder="0.00" type="number" step="0.01" min="0.01" max={200000}
                   className="input-class pl-8" {...field} />
               </div>
             </FormControl>
@@ -179,12 +203,19 @@ function Step1({
                 <AlertTriangle size={12} /> Insufficient balance
               </p>
             )}
-            {amount > 5000 && !insufficient && (
+            {amount > 10000 && !insufficient && (
               <p className="flex items-center gap-1.5 text-12 text-amber-600">
-                <AlertTriangle size={12} /> Transfers over $5,000 may require additional review
+                <AlertTriangle size={12} /> Transfers over $10,000 may require additional review
               </p>
             )}
-            <p className="text-11 text-gray-400">Maximum: $50,000 per transfer</p>
+            {amount > maxAmount && !insufficient && (
+              <p className="flex items-center gap-1.5 text-12 text-red-600">
+                <AlertTriangle size={12} /> Exceeds maximum of {rail === "US_WIRE" ? "$100,000" : "$200,000"} for this transfer type
+              </p>
+            )}
+            <p className="text-11 text-gray-400">
+              Maximum: {rail === "US_WIRE" ? "$100,000 (Wire)" : "$200,000 per transfer"}
+            </p>
           </FormItem>
         )}
       />
@@ -203,14 +234,12 @@ function Step1({
                   onClick={() => field.onChange(type)}
                   className={`
                     flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all
-                    ${field.value === type
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300"
-                    }
+                    ${field.value === type ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}
                   `}
                 >
-                  {type === "domestic" ? <DollarSign size={20} className={field.value === type ? "text-blue-600" : "text-gray-400"} />
-                    : <Globe size={20} className={field.value === type ? "text-blue-600" : "text-gray-400"} />}
+                  {type === "domestic"
+                    ? <DollarSign size={20} className={field.value === type ? "text-blue-600" : "text-gray-400"} />
+                    : <Globe     size={20} className={field.value === type ? "text-blue-600" : "text-gray-400"} />}
                   <span className={`text-13 font-semibold capitalize ${field.value === type ? "text-blue-700" : "text-gray-600"}`}>
                     {type}
                   </span>
@@ -224,25 +253,12 @@ function Step1({
           </FormItem>
         )}
       />
-    </div>
-  );
-}
 
-// ── Step 2: Recipient ─────────────────────────────────────────────────────────
+      {/* ── Divider ── */}
+      <div className="border-t border-gray-100 pt-2">
+        <p className="text-11 font-semibold uppercase tracking-widest text-gray-400 mb-4">Recipient Details</p>
+      </div>
 
-function Step2({
-  form,
-  transferType,
-}: {
-  form: ReturnType<typeof useForm<FormValues>>;
-  transferType: "domestic" | "international";
-}) {
-  const country = form.watch("recipientCountry");
-  const usSubRail = form.watch("usSubRail");
-  const rail = computeRail(country, transferType, usSubRail);
-
-  return (
-    <div className="flex flex-col gap-5">
       <FormField
         control={form.control}
         name="recipientName"
@@ -325,22 +341,11 @@ function Step2({
       />
 
       {country && <RailBadge rail={rail} />}
-    </div>
-  );
-}
 
-// ── Step 3: Bank Details ──────────────────────────────────────────────────────
-
-function Step3({
-  form,
-  rail,
-}: {
-  form: ReturnType<typeof useForm<FormValues>>;
-  rail: TransferRail;
-}) {
-  return (
-    <div className="flex flex-col gap-5">
-      <RailBadge rail={rail} />
+      {/* ── Divider ── */}
+      <div className="border-t border-gray-100 pt-2">
+        <p className="text-11 font-semibold uppercase tracking-widest text-gray-400 mb-4">Bank Details</p>
+      </div>
 
       {/* US ACH & Wire */}
       {(rail === "US_ACH" || rail === "US_WIRE") && (
@@ -356,12 +361,7 @@ function Step3({
             <FormItem>
               <FormLabel className="text-14 font-medium text-gray-700">Routing Number (ABA)</FormLabel>
               <FormControl>
-                <Input placeholder="9-digit routing number" className="input-class font-mono" maxLength={9} {...field}
-                  onChange={e => {
-                    field.onChange(e);
-                    // Show checksum feedback inline
-                  }}
-                />
+                <Input placeholder="9-digit routing number" className="input-class font-mono" maxLength={9} {...field} />
               </FormControl>
               <FormDescription className="text-11 text-gray-400">
                 {field.value && field.value.length === 9 && (
@@ -501,7 +501,7 @@ function Step3({
                 <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger className="input-class"><SelectValue placeholder="Select purpose" /></SelectTrigger>
                   <SelectContent>
-                    {["Family support","Goods/Services","Education","Investment","Real estate","Medical","Other"].map(p => (
+                    {["Family support", "Goods/Services", "Education", "Investment", "Real estate", "Medical", "Other"].map(p => (
                       <SelectItem key={p} value={p}>{p}</SelectItem>
                     ))}
                   </SelectContent>
@@ -515,19 +515,42 @@ function Step3({
   );
 }
 
-// ── Step 4: FX & Fees ─────────────────────────────────────────────────────────
+// ── Step 2: Review (FX breakdown + full summary + note) ───────────────────────
 
-function Step4({
+function ReviewStep({
+  form,
+  formData,
+  rail,
   fxQuote,
   fxLoading,
-  amount,
-  toCurrency,
+  senderAccountNumber,
 }: {
+  form: ReturnType<typeof useForm<FormValues>>;
+  formData: FormValues;
+  rail: TransferRail;
   fxQuote: FXQuote | null;
   fxLoading: boolean;
-  amount: number;
-  toCurrency: string;
+  senderAccountNumber: string;
 }) {
+  const { label, flag } = RAIL_LABELS[rail];
+  const amount = Number(formData.amount);
+  const toCurrency = fxQuote?.toCurrency ?? "USD";
+  const isSameCurrency = toCurrency === "USD";
+  const isLarge = amount > 5000;
+
+  const maskMiddle = (s: string) => {
+    if (!s || s.length <= 4) return s;
+    return s.slice(0, 2) + "•".repeat(s.length - 4) + s.slice(-2);
+  };
+
+  const bankDetails: Array<[string, string]> = [];
+  if (formData.accountNumber) bankDetails.push(["Account",   maskMiddle(formData.accountNumber)]);
+  if (formData.routingNumber) bankDetails.push(["Routing",   maskMiddle(formData.routingNumber)]);
+  if (formData.accountType)   bankDetails.push(["Type",      formData.accountType]);
+  if (formData.sortCode)      bankDetails.push(["Sort code", formData.sortCode]);
+  if (formData.iban)          bankDetails.push(["IBAN",      maskMiddle(formData.iban)]);
+  if (formData.swiftCode)     bankDetails.push(["SWIFT/BIC", formData.swiftCode]);
+
   if (fxLoading) {
     return (
       <div className="flex flex-col gap-4">
@@ -538,79 +561,6 @@ function Step4({
     );
   }
 
-  if (!fxQuote) {
-    return <p className="text-13 text-red-500">Could not load exchange rate. Please go back and try again.</p>;
-  }
-
-  const isSameCurrency = toCurrency === "USD";
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-gray-200 overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <p className="text-13 font-semibold text-gray-700">Transfer breakdown</p>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {[
-            { label: "You send",      value: `$${amount.toFixed(2)} USD`,                  bold: false },
-            !isSameCurrency && { label: "Exchange rate", value: `1 USD = ${fxQuote.rate} ${toCurrency}`, bold: false },
-            { label: "Transfer fee",  value: fxQuote.fee === 0 ? "Free" : `$${fxQuote.fee.toFixed(2)}`, bold: false },
-            { label: "Total debit",   value: `$${fxQuote.totalDebit.toFixed(2)} USD`,       bold: true  },
-            { label: "Recipient gets",value: `${fxQuote.convertedAmount.toFixed(2)} ${toCurrency}`, bold: true },
-          ].filter((x): x is { label: string; value: string; bold: boolean } => Boolean(x)).map(({ label, value, bold }) => (
-            <div key={label} className={`flex justify-between px-4 py-3 ${bold ? "bg-green-50" : ""}`}>
-              <span className="text-13 text-gray-600">{label}</span>
-              <span className={`text-13 font-mono ${bold ? "font-bold text-gray-900" : "text-gray-700"}`}>{value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-12 text-blue-700">
-        <Clock size={13} className="shrink-0" />
-        <span>Estimated delivery: <strong>{fxQuote.estimatedDelivery}</strong></span>
-      </div>
-
-      <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-12 text-amber-700">
-        <Shield size={13} className="mt-0.5 shrink-0" />
-        <span>Exchange rates are locked at the time of confirmation. The rate shown is indicative until you confirm.</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Step 5: Review & Confirm ──────────────────────────────────────────────────
-
-function Step5({
-  form,
-  formData,
-  rail,
-  fxQuote,
-  senderAccountNumber,
-}: {
-  form: ReturnType<typeof useForm<FormValues>>;
-  formData: FormValues;
-  rail: TransferRail;
-  fxQuote: FXQuote | null;
-  senderAccountNumber: string;
-}) {
-  const { label, flag } = RAIL_LABELS[rail];
-  const amount = Number(formData.amount);
-  const isLarge = amount > 5000;
-
-  const maskMiddle = (s: string) => {
-    if (!s || s.length <= 4) return s;
-    return s.slice(0, 2) + "•".repeat(s.length - 4) + s.slice(-2);
-  };
-
-  const bankDetails: Array<[string, string]> = [];
-  if (formData.accountNumber) bankDetails.push(["Account", maskMiddle(formData.accountNumber)]);
-  if (formData.routingNumber) bankDetails.push(["Routing", maskMiddle(formData.routingNumber)]);
-  if (formData.accountType)   bankDetails.push(["Type", formData.accountType]);
-  if (formData.sortCode)      bankDetails.push(["Sort code", formData.sortCode]);
-  if (formData.iban)          bankDetails.push(["IBAN", maskMiddle(formData.iban)]);
-  if (formData.swiftCode)     bankDetails.push(["SWIFT/BIC", formData.swiftCode]);
-
   return (
     <div className="flex flex-col gap-5">
       {isLarge && (
@@ -620,20 +570,47 @@ function Step5({
         </div>
       )}
 
-      {/* Summary card */}
+      {/* FX / fee breakdown */}
+      {fxQuote ? (
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <p className="text-13 font-semibold text-gray-700">Transfer breakdown</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {[
+              { label: "You send",        value: `$${amount.toFixed(2)} USD`,                                      bold: false },
+              !isSameCurrency ? { label: "Exchange rate", value: `1 USD = ${fxQuote.rate} ${toCurrency}`,          bold: false } : null,
+              { label: "Transfer fee",    value: fxQuote.fee === 0 ? "Free" : `$${fxQuote.fee.toFixed(2)}`,        bold: false },
+              { label: "Total debit",     value: `$${fxQuote.totalDebit.toFixed(2)} USD`,                          bold: true  },
+              { label: "Recipient gets",  value: `${fxQuote.convertedAmount.toFixed(2)} ${toCurrency}`,            bold: true  },
+            ].filter((x): x is { label: string; value: string; bold: boolean } => Boolean(x)).map(({ label, value, bold }) => (
+              <div key={label} className={`flex justify-between px-4 py-3 ${bold ? "bg-green-50" : ""}`}>
+                <span className="text-13 text-gray-600">{label}</span>
+                <span className={`text-13 font-mono ${bold ? "font-bold text-gray-900" : "text-gray-700"}`}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-13 text-red-500">Could not load exchange rate. Please go back and try again.</p>
+      )}
+
+      {fxQuote && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-12 text-blue-700">
+          <Clock size={13} className="shrink-0" />
+          <span>Estimated delivery: <strong>{fxQuote.estimatedDelivery}</strong></span>
+        </div>
+      )}
+
+      {/* Transfer summary */}
       <div className="rounded-xl border border-gray-200 overflow-hidden text-13">
         {[
-          ["From",      senderAccountNumber],
-          ["To",        `${formData.recipientName} · ${flag} ${formData.recipientCountry}`],
-          ["Bank",      formData.bankName],
-          ["Rail",      label],
+          ["From",   senderAccountNumber],
+          ["To",     `${formData.recipientName} · ${flag} ${formData.recipientCountry}`],
+          ["Bank",   formData.bankName],
+          ["Rail",   label],
           ...bankDetails,
-          ["Amount",    `$${amount.toFixed(2)}`],
-          fxQuote && fxQuote.fee > 0 ? ["Fee", `$${fxQuote.fee.toFixed(2)}`] : null,
-          fxQuote ? ["Total debit", `$${fxQuote.totalDebit.toFixed(2)}`] : null,
-          fxQuote ? ["Recipient gets", `${fxQuote.convertedAmount.toFixed(2)} ${fxQuote.toCurrency}`] : null,
-          fxQuote ? ["Delivery", fxQuote.estimatedDelivery] : null,
-        ].filter((x): x is [string, string] => Array.isArray(x)).map(([k, v]) => (
+        ].map(([k, v]) => (
           <div key={k} className="flex justify-between border-b border-gray-100 px-4 py-2.5 last:border-0">
             <span className="text-gray-500">{k}</span>
             <span className="font-medium text-gray-900">{v}</span>
@@ -658,23 +635,85 @@ function Step5({
         <Lock size={13} className="mt-0.5 shrink-0" />
         <span>Your transfer is protected. By confirming, you authorise this debit from your account.</span>
       </div>
+
+      <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-12 text-amber-700">
+        <Shield size={13} className="mt-0.5 shrink-0" />
+        <span>Exchange rates are locked at the time of confirmation. The rate shown is indicative until you confirm.</span>
+      </div>
     </div>
   );
 }
 
-// ── Main form orchestrator ────────────────────────────────────────────────────
+// ── Step 3: Success ───────────────────────────────────────────────────────────
+
+function SuccessStep({
+  amount,
+  fee,
+  recipientName,
+  rail,
+  delivery,
+  toCurrency,
+  convertedAmount,
+}: {
+  amount: number;
+  fee: number;
+  recipientName: string;
+  rail: TransferRail;
+  delivery: string;
+  toCurrency: string;
+  convertedAmount: number;
+}) {
+  const { label, flag } = RAIL_LABELS[rail];
+  return (
+    <div className="flex flex-col items-center gap-6 py-4 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+        <CheckCircle2 size={36} className="text-green-500" />
+      </div>
+      <div>
+        <h3 className="text-18 font-bold text-gray-900">Transfer Submitted!</h3>
+        <p className="mt-1 text-13 text-gray-500">
+          Your transfer has been received and is being processed.
+        </p>
+      </div>
+
+      <div className="w-full rounded-xl border border-gray-200 overflow-hidden text-13 text-left">
+        {[
+          ["Recipient",      recipientName],
+          ["Rail",           `${flag} ${label}`],
+          ["Amount sent",    `$${(amount + fee).toFixed(2)} USD`],
+          ["Recipient gets", `${convertedAmount.toFixed(2)} ${toCurrency}`],
+          ["Est. delivery",  delivery],
+        ].map(([k, v]) => (
+          <div key={k} className="flex justify-between border-b border-gray-100 px-4 py-2.5 last:border-0">
+            <span className="text-gray-500">{k}</span>
+            <span className="font-medium text-gray-900">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-12 text-gray-400 max-w-xs">
+        You will receive a confirmation email shortly. Visit your transaction history to track the status.
+      </p>
+    </div>
+  );
+}
+
+// ── Main orchestrator ─────────────────────────────────────────────────────────
 
 export default function MultiStepTransferForm({
   senderAccountNumber,
   senderBalance,
   prefillAccountNumber,
 }: PaymentTransferFormProps) {
-  const router = useRouter();
-  const [step, setStep]           = useState(1);
-  const [fxQuote, setFxQuote]     = useState<FXQuote | null>(null);
-  const [fxLoading, setFxLoading] = useState(false);
+  const [step, setStep]             = useState(1);
+  const [fxQuote, setFxQuote]       = useState<FXQuote | null>(null);
+  const [fxLoading, setFxLoading]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+  const [successData, setSuccessData] = useState<{
+    amount: number; fee: number; recipientName: string;
+    rail: TransferRail; delivery: string; toCurrency: string; convertedAmount: number;
+  } | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -692,11 +731,11 @@ export default function MultiStepTransferForm({
   const watchedType    = form.watch("transferType");
   const watchedCountry = form.watch("recipientCountry");
   const watchedSubRail = form.watch("usSubRail");
-  const rail = computeRail(watchedCountry, watchedType, watchedSubRail);
-  const toCurrency = getTargetCurrency(watchedCountry);
-  const amount = Number(form.watch("amount")) || 0;
+  const rail           = computeRail(watchedCountry, watchedType, watchedSubRail);
+  const toCurrency     = getTargetCurrency(watchedCountry);
+  const amount         = Number(form.watch("amount")) || 0;
 
-  // ── FX quote fetcher ─────────────────────────────────────────────────────────
+  // ── FX quote ────────────────────────────────────────────────────────────────
   const fetchFXQuote = useCallback(async () => {
     setFxLoading(true);
     try {
@@ -707,49 +746,54 @@ export default function MultiStepTransferForm({
     }
   }, [toCurrency, amount]);
 
-  // ── Step navigation ───────────────────────────────────────────────────────────
+  // ── Step 1 → 2 validation ───────────────────────────────────────────────────
   const handleNext = async () => {
-    let fields: Array<keyof FormValues> = [];
+    setError(null);
 
-    if (step === 1) {
-      fields = ["amount", "transferType"];
-      if (Number(form.getValues("amount")) > senderBalance) return;
-    } else if (step === 2) {
-      fields = ["recipientName", "recipientCountry", "bankName"];
-      if (watchedType === "domestic" && watchedCountry === "US") fields.push("usSubRail");
-    } else if (step === 3) {
-      fields = getStep3Fields(rail);
-      // Custom per-rail validation before trigger
-      const vals = form.getValues();
-      let ok = true;
-      if (rail === "US_ACH" || rail === "US_WIRE") {
-        if (vals.routingNumber && !validateRoutingNumber(vals.routingNumber)) {
-          form.setError("routingNumber", { message: "Invalid ABA routing number" });
-          ok = false;
-        }
-      }
-      if (rail === "UK_FPS" && vals.sortCode && !validateSortCode(vals.sortCode)) {
-        form.setError("sortCode", { message: "Sort code must be 6 digits" });
-        ok = false;
-      }
-      if (rail === "EU_SEPA" && vals.iban) {
-        const r = validateIBAN(vals.iban);
-        if (!r.valid) { form.setError("iban", { message: r.error }); ok = false; }
-      }
-      if (rail === "SWIFT" && vals.swiftCode && !validateSWIFT(vals.swiftCode)) {
-        form.setError("swiftCode", { message: "Invalid SWIFT/BIC format" });
-        ok = false;
-      }
-      if (!ok) return;
+    // Basic fields
+    const baseFields: Array<keyof FormValues> = [
+      "amount", "transferType",
+      "recipientName", "recipientCountry", "bankName",
+    ];
+    if (watchedType === "domestic" && watchedCountry === "US") baseFields.push("usSubRail");
+
+    const baseValid = await form.trigger(baseFields);
+    if (!baseValid) return;
+    const enteredAmount = Number(form.getValues("amount"));
+    const limit = rail === "US_WIRE" ? 100000 : 200000;
+    if (enteredAmount > senderBalance) return;
+    if (enteredAmount > limit) {
+      form.setError("amount", { message: `Maximum for this transfer type is $${limit.toLocaleString()}` });
+      return;
     }
 
-    if (fields.length > 0) {
-      const valid = await form.trigger(fields);
-      if (!valid) return;
+    // Rail-specific validation
+    const bankFieldNames = getBankFields(rail);
+    const vals = form.getValues();
+    let ok = true;
+
+    if ((rail === "US_ACH" || rail === "US_WIRE") && vals.routingNumber && !validateRoutingNumber(vals.routingNumber)) {
+      form.setError("routingNumber", { message: "Invalid ABA routing number" }); ok = false;
+    }
+    if (rail === "UK_FPS" && vals.sortCode && !validateSortCode(vals.sortCode)) {
+      form.setError("sortCode", { message: "Sort code must be 6 digits" }); ok = false;
+    }
+    if (rail === "EU_SEPA" && vals.iban) {
+      const r = validateIBAN(vals.iban);
+      if (!r.valid) { form.setError("iban", { message: r.error }); ok = false; }
+    }
+    if (rail === "SWIFT" && vals.swiftCode && !validateSWIFT(vals.swiftCode)) {
+      form.setError("swiftCode", { message: "Invalid SWIFT/BIC format" }); ok = false;
+    }
+    if (!ok) return;
+
+    if (bankFieldNames.length > 0) {
+      const bankValid = await form.trigger(bankFieldNames);
+      if (!bankValid) return;
     }
 
-    if (step === 3) await fetchFXQuote();
-    setStep(s => s + 1);
+    await fetchFXQuote();
+    setStep(2);
   };
 
   const handleBack = () => {
@@ -757,34 +801,37 @@ export default function MultiStepTransferForm({
     setStep(s => s - 1);
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = form.handleSubmit(async (data) => {
-    if (!fxQuote) { setError("Exchange rate not available. Please go back and try again."); return; }
+    if (!fxQuote) {
+      setError("Exchange rate not available. Please go back and try again.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     const result = await createInternationalTransfer({
-      amount:           Number(data.amount),
-      transferType:     data.transferType,
+      amount: Number(data.amount),
+      transferType: data.transferType,
       rail,
       toCurrency,
-      fxRate:           fxQuote.rate,
-      fee:              fxQuote.fee,
-      convertedAmount:  fxQuote.convertedAmount,
-      recipientName:    data.recipientName,
+      fxRate: fxQuote.rate,
+      fee: fxQuote.fee,
+      convertedAmount: fxQuote.convertedAmount,
+      recipientName: data.recipientName,
       recipientCountry: data.recipientCountry,
-      bankName:         data.bankName,
-      accountNumber:    data.accountNumber,
-      routingNumber:    data.routingNumber,
-      accountType:      data.accountType,
-      sortCode:         data.sortCode,
-      iban:             data.iban,
-      swiftCode:        data.swiftCode,
-      bankAddress:      data.bankAddress,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      routingNumber: data.routingNumber,
+      accountType: data.accountType,
+      sortCode: data.sortCode,
+      iban: data.iban,
+      swiftCode: data.swiftCode,
+      bankAddress: data.bankAddress,
       recipientAddress: data.recipientAddress,
-      purpose:          data.purpose,
-      note:             data.note,
+      purpose: data.purpose,
+      note: data.note,
     });
 
     setSubmitting(false);
@@ -794,19 +841,19 @@ export default function MultiStepTransferForm({
       return;
     }
 
-    const params = new URLSearchParams({
-      amount:    String(Number(data.amount) + (fxQuote?.fee ?? 0)),
-      currency:  toCurrency,
-      recipient: encodeURIComponent(data.recipientName),
+    setSuccessData({
+      amount: Number(data.amount),
+      fee: fxQuote.fee,
+      recipientName: data.recipientName,
       rail,
-      delivery:  fxQuote?.estimatedDelivery ?? "",
-      status:    (result as { status?: string }).status ?? "completed",
-      txnId:     (result as { transactionId?: string }).transactionId ?? "",
+      delivery: fxQuote.estimatedDelivery,
+      toCurrency,
+      convertedAmount: fxQuote.convertedAmount,
     });
-    router.push(`/transfer-success?${params.toString()}`);
+    setStep(3);
   });
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 pb-8">
@@ -819,41 +866,48 @@ export default function MultiStepTransferForm({
           </div>
         )}
 
-        {step === 1 && <Step1 form={form} senderAccountNumber={senderAccountNumber} senderBalance={senderBalance} />}
-        {step === 2 && <Step2 form={form} transferType={watchedType} />}
-        {step === 3 && <Step3 form={form} rail={rail} />}
-        {step === 4 && <Step4 fxQuote={fxQuote} fxLoading={fxLoading} amount={amount} toCurrency={toCurrency} />}
-        {step === 5 && (
-          <Step5
+        {step === 1 && (
+          <DetailsStep form={form} senderAccountNumber={senderAccountNumber} senderBalance={senderBalance} />
+        )}
+
+        {step === 2 && (
+          <ReviewStep
             form={form}
             formData={form.getValues()}
             rail={rail}
             fxQuote={fxQuote}
+            fxLoading={fxLoading}
             senderAccountNumber={senderAccountNumber}
           />
         )}
 
-        {/* Navigation buttons */}
-        <div className={`flex gap-3 pt-2 ${step === 1 ? "justify-end" : "justify-between"}`}>
-          {step > 1 && (
-            <Button type="button" variant="outline" onClick={handleBack} className="gap-1.5">
-              <ArrowLeft size={15} /> Back
-            </Button>
-          )}
-          {step < 5 && (
-            <Button type="button" onClick={handleNext} className="payment-transfer_btn gap-1.5">
-              Next <ArrowRight size={15} />
-            </Button>
-          )}
-          {step === 5 && (
-            <Button type="submit" className="payment-transfer_btn gap-1.5" disabled={submitting}>
-              {submitting
-                ? <><Loader2 size={15} className="animate-spin" /> Sending…</>
-                : <><Send size={15} /> Confirm Transfer</>
-              }
-            </Button>
-          )}
-        </div>
+        {step === 3 && successData && (
+          <SuccessStep {...successData} />
+        )}
+
+        {/* Navigation */}
+        {step < 3 && (
+          <div className={`flex gap-3 pt-2 ${step === 1 ? "justify-end" : "justify-between"}`}>
+            {step === 2 && (
+              <Button type="button" variant="outline" onClick={handleBack} className="gap-1.5">
+                <ArrowLeft size={15} /> Back
+              </Button>
+            )}
+            {step === 1 && (
+              <Button type="button" onClick={handleNext} className="payment-transfer_btn gap-1.5">
+                Next <ArrowRight size={15} />
+              </Button>
+            )}
+            {step === 2 && (
+              <Button type="submit" className="payment-transfer_btn gap-1.5" disabled={submitting || !fxQuote}>
+                {submitting
+                  ? <><Loader2 size={15} className="animate-spin" /> Sending…</>
+                  : <><Send size={15} /> Confirm &amp; Send</>
+                }
+              </Button>
+            )}
+          </div>
+        )}
       </form>
     </Form>
   );

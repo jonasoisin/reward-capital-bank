@@ -390,7 +390,7 @@ h1.ds em, h2.ds em, h3.ds em,
 
   /* Payment Transfer */
   .payment-transfer {
-    @apply no-scrollbar flex flex-col overflow-y-scroll bg-gray-25 p-8 md:max-h-screen xl:py-12;
+    @apply no-scrollbar flex flex-col bg-gray-25 p-8 xl:py-12;
   }
 
   .payment-transfer_form-item {
@@ -450,7 +450,7 @@ h1.ds em, h2.ds em, h3.ds em,
 
   /* Sidebar */
   .sidebar {
-    @apply sticky left-0 top-0 flex h-screen w-fit flex-col  justify-between border-r border-gray-200 bg-white pt-8 text-white max-md:hidden sm:p-4 xl:p-6 2xl:w-[355px];
+    @apply sticky left-0 top-0 flex h-screen w-fit flex-col justify-between border-r border-gray-200 bg-white pt-8 text-white max-md:hidden sm:p-4 xl:p-6 2xl:w-[355px] overflow-y-auto;
   }
 
   .sidebar-logo {
@@ -464,4 +464,57 @@ h1.ds em, h2.ds em, h3.ds em,
   .sidebar-label {
     @apply text-16 font-semibold text-black-2 max-xl:hidden;
   }
+
+  /* ── Auth page animations ───────────────────────────────────────────── */
+  .auth-orb {
+    @apply absolute rounded-full opacity-30 blur-3xl pointer-events-none;
+    animation: auth-orb-pulse 8s ease-in-out infinite;
+  }
+  .auth-orb-1 {
+    @apply w-[500px] h-[500px] -top-32 -left-32 bg-blue-400;
+    animation-delay: 0s;
+  }
+  .auth-orb-2 {
+    @apply w-[400px] h-[400px] -bottom-24 -right-20 bg-indigo-400;
+    animation-delay: 3s;
+  }
+
+  .auth-float-slow {
+    animation: auth-float 7s ease-in-out infinite;
+  }
+  .auth-float-mid {
+    animation: auth-float 5.5s ease-in-out infinite;
+    animation-delay: 1.2s;
+  }
+  .auth-float-fast {
+    animation: auth-float 4.5s ease-in-out infinite;
+    animation-delay: 0.6s;
+  }
+
+  .auth-slide-in-left {
+    animation: auth-slide-left 0.7s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  .auth-slide-in-right {
+    animation: auth-slide-right 0.7s cubic-bezier(0.16,1,0.3,1) both;
+  }
+}
+
+@keyframes auth-orb-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.25; }
+  50%       { transform: scale(1.15); opacity: 0.4; }
+}
+
+@keyframes auth-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-14px); }
+}
+
+@keyframes auth-slide-left {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes auth-slide-right {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
 }

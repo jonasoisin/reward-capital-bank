@@ -236,7 +236,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                     <InfoRow label="Status" value={account.status} />
                     <InfoRow
                       label="Balance"
-                      value={formatAmount(account.balance)}
+                      value={formatAmount(account.availableBalance)}
                     />
                     <InfoRow
                       label="Opened"
@@ -272,7 +272,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                     className="stat-number mt-2"
                     style={{ color: "var(--ds-foreground)" }}
                   >
-                    {formatAmount(account.balance)}
+                    {formatAmount(account.availableBalance)}
                   </p>
                   <p
                     className="mt-1 text-xs"

@@ -22,7 +22,7 @@ const Transfer = async () => {
       <section className="size-full pt-5">
         <PaymentTransferForm
           senderAccountNumber={formatAccountNumber(account.accountNumber)}
-          senderBalance={account.balance}
+          senderBalance={account.availableBalance}
         />
       </section>
     </section>

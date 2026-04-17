@@ -48,7 +48,7 @@ const MyBanks = async () => {
               {card && (
                 <div className="flex flex-col gap-1 text-sm text-gray-500 font-mono">
                   <span>Account: {formatAccountNumber(account.accountNumber)}</span>
-                  <span>Balance: {formatAmount(account.balance)}</span>
+                  <span>Balance: {formatAmount(account.availableBalance)}</span>
                 </div>
               )}
             </>

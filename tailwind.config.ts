@@ -20,6 +20,25 @@ const config = {
     },
     extend: {
       colors: {
+        primary: {
+          DEFAULT: "var(--ds-primary)",
+          foreground: "var(--ds-primary-fg)",
+        },
+        background: "var(--ds-background)",
+        foreground: "var(--ds-foreground)",
+        muted: {
+          DEFAULT: "var(--ds-muted)",
+          foreground: "var(--ds-muted-foreground)",
+        },
+        border: "var(--ds-border)",
+        card: {
+          DEFAULT: "var(--ds-card)",
+          foreground: "var(--ds-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--ds-card)",
+          foreground: "var(--ds-foreground)",
+        },
         fill: {
           1: "rgba(255, 255, 255, 0.10)",
         },

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import HeaderBox from "@/components/HeaderBox";
 import { Pagination } from "@/components/Pagination";
 import TransactionsTable from "@/components/TransactionsTable";
@@ -41,7 +43,7 @@ const TransactionHistory = async ({
             <div className="transactions-account-balance">
               <p className="text-14">Current balance</p>
               <p className="text-24 text-center font-bold">
-                {formatAmount(account.balance)}
+                {formatAmount(account.availableBalance)}
               </p>
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import mongoose from "mongoose";
+import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/mongodb";
 import Account from "@/lib/models/Account";
 import Transaction from "@/lib/models/Transaction";
@@ -22,7 +23,7 @@ import {
 // ── Validation schema (server-side, rail-aware) ───────────────────────────────
 
 const baseSchema = z.object({
-  amount:           z.number().positive().max(50000),
+  amount:           z.number().positive().max(200000),
   transferType:     z.enum(["domestic", "international"]),
   rail:             z.enum(["US_ACH", "US_WIRE", "UK_FPS", "EU_SEPA", "SWIFT"]),
   toCurrency:       z.string().min(3).max(3),
@@ -102,8 +103,8 @@ export async function createInternationalTransfer(data: unknown) {
   const senderAccount = await Account.findOne({ userId: session.userId });
   if (!senderAccount) return { error: "Your account was not found." };
   if (senderAccount.status !== "active") return { error: "Your account is frozen or closed." };
-  if (senderAccount.balance < totalDebit) {
-    return { error: `Insufficient balance. You need $${totalDebit.toFixed(2)} (amount + fee) but have $${senderAccount.balance.toFixed(2)}.` };
+  if (senderAccount.availableBalance < totalDebit) {
+    return { error: `Insufficient balance. You need $${totalDebit.toFixed(2)} (amount + fee) but have $${senderAccount.availableBalance.toFixed(2)}.` };
   }
 
   // All user-submitted transfers start as pending; admin approves/rejects.
@@ -124,7 +125,8 @@ export async function createInternationalTransfer(data: unknown) {
   dbSession.startTransaction();
   try {
     // 1. Debit sender
-    senderAccount.balance -= totalDebit;
+    senderAccount.availableBalance -= totalDebit;
+    senderAccount.ledgerBalance    -= totalDebit;
     await senderAccount.save({ session: dbSession });
 
     // 2. Create InternationalTransaction record
@@ -187,13 +189,18 @@ export async function createInternationalTransfer(data: unknown) {
         recipientName: sender.firstName,
         type: "sent",
         amount: totalDebit,
-        newBalance: senderAccount.balance,
+        newBalance: senderAccount.availableBalance,
         counterparty: `${d.recipientName} (${d.recipientCountry} · ${d.rail.replace("_", " ")})`,
         note: d.note || undefined,
         date: new Date(),
       });
       sendMail({ to: sender.email, subject, html, text });
     }
+
+    // Bust cached pages so balance reflects immediately
+    revalidatePath("/dashboard");
+    revalidatePath("/payment-transfer");
+    revalidatePath("/transaction-history");
 
     return { success: true, transactionId: intlTxn._id.toString(), status: txnStatus };
   } catch (err) {

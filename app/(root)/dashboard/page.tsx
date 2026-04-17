@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import HeaderBox from "@/components/HeaderBox";
 import RecentTransactions from "@/components/RecentTransactions";
 import RightSidebar from "@/components/RightSidebar";
@@ -44,7 +46,7 @@ const Home = async ({ searchParams }: SearchParamProps) => {
           />
 
           <TotalBalanceBox
-            balance={account?.balance ?? 0}
+            balance={account?.availableBalance ?? 0}
             accountNumber={
               account ? formatAccountNumber(account.accountNumber) : "—"
             }

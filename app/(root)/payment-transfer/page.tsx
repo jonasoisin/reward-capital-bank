@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import HeaderBox from "@/components/HeaderBox";
 import MultiStepTransferForm from "@/components/MultiStepTransferForm";
 import { getLoggedInUser } from "@/lib/actions/user.actions";
@@ -27,7 +29,7 @@ const Transfer = async ({
       <section className="size-full pt-5">
         <MultiStepTransferForm
           senderAccountNumber={formatAccountNumber(account.accountNumber)}
-          senderBalance={account.balance}
+          senderBalance={account.availableBalance}
           prefillAccountNumber={prefillAccountNumber}
         />
       </section>
