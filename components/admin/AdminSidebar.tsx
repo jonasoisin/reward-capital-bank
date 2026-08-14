@@ -21,7 +21,9 @@ export default function AdminSidebar({ adminName }: AdminSidebarProps) {
 
   async function handleLogout() {
     await fetch("/api/auth/signout", { method: "POST" });
-    window.location.href = "/sign-in";
+    // Admin sessions live on their own subdomain — return to the admin login,
+    // not the user portal's /sign-in.
+    window.location.href = "/admin/login";
   }
 
   return (
