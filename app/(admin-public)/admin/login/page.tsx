@@ -28,7 +28,13 @@ export default function AdminLoginPage() {
         setError("Not authorised. Admin access only.");
         return;
       }
-      window.location.href = "/admin/dashboard";
+      // On the admin subdomain the tree is served bare ("/dashboard"); on a
+      // standalone host it keeps the "/admin" prefix. The middleware accepts
+      // both spellings, so this only avoids a needless extra redirect.
+      const host = window.location.hostname.toLowerCase();
+      window.location.href = host.startsWith("admin.")
+        ? "/dashboard"
+        : "/admin/dashboard";
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
